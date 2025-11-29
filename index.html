@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tic-Tac-Toe — Local Ludo‑style Friends (localStorage)</title>
+  <style>
+    :root{ --bg:#071028; --card:#0b1520; --muted:#94a3b8; --accent:#ffcc00; --accent2:#06b6d4; --ok:#10b981 }
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial; margin:0; min-height:100vh; background:linear-gradient(180deg,#071028,#072438); color:#e6eef6; display:flex; align-items:flex-start; justify-content:center; padding:28px}
+    .app{width:980px; max-width:100%}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+    h1{font-size:20px;margin:0}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:16px;border-radius:12px;box-shadow:0 8px 24px rgba(2,6,23,0.6)}
+    .layout{display:grid;grid-template-columns:320px 1fr;gap:16px}
+    .muted{color:var(--muted);font-size:13px}
+    button{background:var(--accent);color:#042;border:none;padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700}
+    .ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--accent2)}
+    .big{padding:12px 14px;font-size:15px;border-radius:10px}
+    .center{display:flex;align-items:center;justify-content:center}
+    .hidden{display:none}
+    .board{display:grid;grid-template-columns:repeat(3,100px);grid-auto-rows:100px;gap:8px;margin-top:12px}
+    .cell{background:rgba(255,255,255,0.02);display:flex;align-items:center;justify-content:center;font-size:40px;border-radius:10px;cursor:pointer;user-select:none}
+    .cell.disabled{opacity:0.6;cursor:not-allowed}
+    input,textarea{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit;padding:10px;border-radius:8px;width:100%}
+    .code-box{background:rgba(255,255,255,0.03);padding:12px;border-radius:8px;font-weight:700;letter-spacing:2px;text-align:center;margin-top:8px}
+    .lobby-player{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.01);margin-bottom:8px}
+    @media(max-width:900px){ .layout{grid-template-columns:1fr} .board{grid-template-columns:repeat(3,80px);grid-auto-rows:80px} .cell{font-size:32px} }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Tic‑Tac‑Toe — Accounts + Friends (local)</h1>
+      <div class="muted">All data stored in your browser (localStorage)</div>
+    </header>
+
+    <div class="layout">
+      <!-- LEFT: auth / play with friends -->
+      <div class="card">
+        <div class="muted">Account</div>
+        <div id="authArea" style="margin-top:8px"></div>
+
+        <hr style="opacity:0.06;margin:12px 0">
+
+        <div class="muted">PLAY WITH FRIENDS</div>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button id="btnCreateRoom" class="big">CREATE ROOM</button>
+          <button id="btnJoinRoom" class="ghost big">JOIN ROOM</button>
+        </div>
+
+        <div id="createBox" class="hidden" style="margin-top:12px">
+          <div class="muted">Room code (share with friend on same device)</div>
+          <div id="roomCode" class="code-box">—</div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="btnCopyCode" class="ghost">Copy</button>
+            <button id="btnCloseCreate" class="ghost">Close</button>
+          </div>
+        </div>
+
+        <div id="joinBox" class="hidden" style="margin-top:12px">
+          <div class="muted">Enter room code</div>
+          <input id="joinInput" placeholder="6-char code" />
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="btnJoinConfirm">Join</button>
+            <button id="btnCloseJoin" class="ghost">Close</button>
+          </div>
+          <div id="joinMsg" class="muted" style="margin-top:8px"></div>
+        </div>
+
+        <div id="lobbyBox" class="hidden" style="margin-top:12px">
+          <div class="muted">Lobby</div>
+          <div id="playersList" style="margin-top:8px"></div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="btnStartGame" class="big">START GAME</button>
+            <button id="btnLeaveRoom" class="ghost">Leave Room</button>
+          </div>
+          <div id="roomInfo" class="muted" style="margin-top:8px"></div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT: board & profile -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div class="muted">Room: <span id="currentRoom">—</span></div>
+            <div style="font-weight:700" id="status">Not in room</div>
+          </div>
+          <div class="muted">Turn: <span id="turnInd">—</span></div>
+        </div>
+
+        <div style="margin-top:12px">
+          <div id="board" class="board"></div>
+
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button id="btnNewLocal" class="ghost">New Local Game</button>
+            <button id="btnResetStats" class="ghost">Reset My Stats</button>
+          </div>
+
+          <div style="margin-top:12px">
+            <div class="muted">History</div>
+            <div id="history" style="margin-top:8px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* Single-file Tic-Tac-Toe with signup/login, profile, and Ludo-style Create/Join rooms
+       Everything stored in localStorage: users (ttt_users), current (ttt_current), rooms (ttt_rooms)
+       Rooms are local-only (same device) but UI simulates Ludo King flow.
+    */
+
+    // --- storage helpers ---
+    function loadUsers(){ try{ return JSON.parse(localStorage.getItem('ttt_users')||'[]') }catch(e){return []} }
+    function saveUsers(u){ localStorage.setItem('ttt_users', JSON.stringify(u||[])) }
+    function loadCurrent(){ const n=localStorage.getItem('ttt_current'); if(!n) return null; const users=loadUsers(); return users.find(x=>x.username===n)||null }
+    function saveCurrent(user){ if(user) localStorage.setItem('ttt_current', user.username); else localStorage.removeItem('ttt_current') }
+    function loadRooms(){ try{ return JSON.parse(localStorage.getItem('ttt_rooms')||'{}') }catch(e){return {}} }
+    function saveRooms(r){ localStorage.setItem('ttt_rooms', JSON.stringify(r||{})) }
+
+    // --- state ---
+    let users = loadUsers();
+    let current = loadCurrent();
+    let rooms = loadRooms();
+    let room = null; // currently joined room object
+    let localSide = null; // 'X' or 'O'
+    let board = Array(9).fill(null);
+    let turn = 'X';
+    let gameOn = false;
+
+    // DOM refs
+    const authArea = document.getElementById('authArea');
+    const btnCreateRoom = document.getElementById('btnCreateRoom');
+    const btnJoinRoom = document.getElementById('btnJoinRoom');
+    const createBox = document.getElementById('createBox');
+    const joinBox = document.getElementById('joinBox');
+    const roomCodeEl = document.getElementById('roomCode');
+    const btnCopyCode = document.getElementById('btnCopyCode');
+    const btnCloseCreate = document.getElementById('btnCloseCreate');
+    const joinInput = document.getElementById('joinInput');
+    const btnJoinConfirm = document.getElementById('btnJoinConfirm');
+    const btnCloseJoin = document.getElementById('btnCloseJoin');
+    const joinMsg = document.getElementById('joinMsg');
+    const lobbyBox = document.getElementById('lobbyBox');
+    const playersList = document.getElementById('playersList');
+    const btnStartGame = document.getElementById('btnStartGame');
+    const btnLeaveRoom = document.getElementById('btnLeaveRoom');
+    const roomInfo = document.getElementById('roomInfo');
+    const currentRoomEl = document.getElementById('currentRoom');
+    const statusEl = document.getElementById('status');
+    const boardEl = document.getElementById('board');
+    const turnInd = document.getElementById('turnInd');
+    const btnNewLocal = document.getElementById('btnNewLocal');
+    const historyEl = document.getElementById('history');
+    const btnResetStats = document.getElementById('btnResetStats');
+
+    // wire
+    btnCreateRoom.addEventListener('click', createRoom);
+    btnCopyCode.addEventListener('click', ()=>copyText(roomCodeEl.innerText));
+    btnCloseCreate.addEventListener('click', ()=>createBox.classList.add('hidden'));
+    btnJoinRoom.addEventListener('click', ()=>{ joinBox.classList.remove('hidden'); });
+    btnJoinConfirm.addEventListener('click', ()=>joinRoom(joinInput.value.trim()));
+    btnCloseJoin.addEventListener('click', ()=>joinBox.classList.add('hidden'));
+    btnStartGame.addEventListener('click', startGame);
+    btnLeaveRoom.addEventListener('click', leaveRoom);
+    btnNewLocal.addEventListener('click', ()=>{ resetBoard(); startLocalGame(); });
+    btnResetStats.addEventListener('click', ()=>{ if(!current) return alert('Sign in first'); if(confirm('Reset your stats?')){ current.stats={played:0,wins:0,losses:0,draws:0}; users = users.map(u=> u.email===current.email? current : u); saveUsers(users); renderAuth(); } });
+
+    // initial render
+    renderAuth();
+    renderBoard();
+    renderHistory();
+
+    // ---------- auth UI ----------
+    function renderAuth(){ authArea.innerHTML=''; if(current){
+        const a = document.createElement('div'); a.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:700">${escapeHtml(current.username)}</div>
+              <div class="muted">${escapeHtml(current.email)}</div>
+            </div>
+            <div style="text-align:right">
+              <button id="btnLogout" class="ghost">Logout</button>
+            </div>
+          </div>
+          <div style="margin-top:10px" class="muted">Stats</div>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <div style="background:rgba(255,255,255,0.01);padding:8px;border-radius:6px;text-align:center"><div class="muted">Played</div><div style="font-weight:700">${current.stats.played}</div></div>
+            <div style="background:rgba(255,255,255,0.01);padding:8px;border-radius:6px;text-align:center"><div class="muted">Wins</div><div style="font-weight:700">${current.stats.wins}</div></div>
+            <div style="background:rgba(255,255,255,0.01);padding:8px;border-radius:6px;text-align:center"><div class="muted">Losses</div><div style="font-weight:700">${current.stats.losses}</div></div>
+            <div style="background:rgba(255,255,255,0.01);padding:8px;border-radius:6px;text-align:center"><div class="muted">Draws</div><div style="font-weight:700">${current.stats.draws}</div></div>
+          </div>
+        `;
+        authArea.appendChild(a);
+        document.getElementById('btnLogout').addEventListener('click', ()=>{ current=null; saveCurrent(null); renderAuth(); });
+      } else {
+        // show signup/login form
+        const f = document.createElement('div'); f.innerHTML = `
+          <div style="display:flex;gap:8px">
+            <button id="showLogin" class="ghost">Login</button>
+            <button id="showSignup">Sign up</button>
+          </div>
+          <div id="authForm" style="margin-top:8px"></div>
+        `; authArea.appendChild(f);
+        document.getElementById('showLogin').addEventListener('click', ()=>renderLogin());
+        document.getElementById('showSignup').addEventListener('click', ()=>renderSignup());
+        renderLogin();
+      }
+    }
+
+    function renderLogin(){ const form = document.getElementById('authForm'); form.innerHTML = `
+      <label class="muted">Email or Username</label>
+      <input id="li-user" />
+      <label class="muted">Password</label>
+      <input id="li-pass" type="password" />
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="btnDoLogin">Login</button>
+        <button id="btnToSignup" class="ghost">Switch</button>
+      </div>
+    `; document.getElementById('btnToSignup').addEventListener('click', ()=>renderSignup()); document.getElementById('btnDoLogin').addEventListener('click', doLogin); }
+
+    function renderSignup(){ const form = document.getElementById('authForm'); form.innerHTML = `
+      <label class="muted">Username</label>
+      <input id="su-user" />
+      <label class="muted">Email</label>
+      <input id="su-email" />
+      <label class="muted">Password</label>
+      <input id="su-pass" type="password" />
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="btnDoSignup">Create</button>
+        <button id="btnToLogin" class="ghost">Switch</button>
+      </div>
+    `; document.getElementById('btnToLogin').addEventListener('click', ()=>renderLogin()); document.getElementById('btnDoSignup').addEventListener('click', doSignup); }
+
+    function doSignup(){ const u=document.getElementById('su-user').value.trim(); const e=document.getElementById('su-email').value.trim(); const p=document.getElementById('su-pass').value; if(!u||!e||!p) return alert('Fill all'); if(users.find(x=>x.username.toLowerCase()===u.toLowerCase())) return alert('Username taken'); if(users.find(x=>x.email.toLowerCase()===e.toLowerCase())) return alert('Email taken'); const user={username:u,email:e,pass:btoa(p),created:new Date().toISOString(),stats:{played:0,wins:0,losses:0,draws:0}}; users.push(user); saveUsers(users); current=user; saveCurrent(current); renderAuth(); alert('Account created'); }
+
+    function doLogin(){ const ident=document.getElementById('li-user').value.trim(); const p=document.getElementById('li-pass').value; if(!ident||!p) return alert('Fill all'); const user = users.find(u=>u.username.toLowerCase()===ident.toLowerCase() || u.email.toLowerCase()===ident.toLowerCase()); if(!user) return alert('No account'); if(user.pass!==btoa(p)) return alert('Incorrect password'); current=user; saveCurrent(current); renderAuth(); alert('Logged in'); }
+
+    // ---------- rooms (local only) ----------
+    function generateCode(){ const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<6;i++) s+=chars[Math.floor(Math.random()*chars.length)]; return s; }
+
+    function createRoom(){ if(!current) return alert('Sign in to create room'); const code = generateCode(); if(rooms[code]) return createRoom(); // collision
+      const r = { code, host: current.username, players: [{username:current.username, side:'X'}], status:'waiting', moves:[], created:Date.now() };
+      rooms[code]=r; saveRooms(rooms); room=r; localSide='X'; showRoomCreated(code); }
+
+    function showRoomCreated(code){ createBox.classList.remove('hidden'); joinBox.classList.add('hidden'); lobbyBox.classList.remove('hidden'); roomCodeEl.innerText=code; currentRoomEl.innerText=code; statusEl.innerText='In lobby (host)'; renderPlayers(); roomInfo.innerText = 'Share this code with a friend (same device).'; }
+
+    function joinRoom(code){ if(!current) return alert('Sign in to join room'); if(!code) return joinMsg.innerText='Enter code'; const r = rooms[code]; if(!r) return joinMsg.innerText='Room not found'; if(r.players.length>=2 && !r.players.find(p=>p.username===current.username)) return joinMsg.innerText='Room full'; if(r.players.find(p=>p.username===current.username)){ room=r; localSide = r.players.find(p=>p.username===current.username).side; currentRoomEl.innerText = code; lobbyBox.classList.remove('hidden'); renderPlayers(); return; }
+      // add player as O
+      r.players.push({username:current.username, side:'O'}); r.status='waiting'; rooms[code]=r; saveRooms(rooms); room=r; localSide='O'; joinBox.classList.add('hidden'); lobbyBox.classList.remove('hidden'); currentRoomEl.innerText=code; statusEl.innerText='In lobby'; renderPlayers(); }
+
+    function renderPlayers(){ playersList.innerHTML=''; if(!room) return; room.players.forEach(p=>{ const d=document.createElement('div'); d.className='lobby-player'; d.innerHTML = `<div style="width:44px;height:44px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:700;color:#042">${escapeHtml(p.username[0]||'P')}</div>
+        <div style="flex:1"><div style="font-weight:700">${escapeHtml(p.username)}</div><div class='muted'>Side: ${p.side}</div></div>${p.username===current.username?'<div class="muted">You</div>':''}`; playersList.appendChild(d); });
+      // host can start when two players
+      const canStart = room.players.length>=2 && room.host===current.username;
+      btnStartGame.style.display = canStart ? 'inline-block' : 'none';
+    }
+
+    function startGame(){ if(!room) return; if(room.players.length<2) return alert('Need 2 players'); room.status='playing'; room.moves = []; rooms[room.code]=room; saveRooms(rooms); gameOn=true; turn='X'; renderBoard(); statusEl.innerText='Playing'; updateTurn(); }
+
+    function leaveRoom(){ if(!room) return; const code = room.code; const r = rooms[code]; if(!r) return; r.players = r.players.filter(p=>p.username!==current.username); if(r.players.length===0){ delete rooms[code]; } else { if(r.host===current.username){ r.host = r.players[0].username; } }
+      saveRooms(rooms); room=null; localSide=null; lobbyBox.classList.add('hidden'); createBox.classList.add('hidden'); joinBox.classList.add('hidden'); currentRoomEl.innerText='—'; statusEl.innerText='Not in room'; renderBoard(); }
+
+    // ---------- game logic (shared between local and room) ----------
+    function renderBoard(){ boardEl.innerHTML=''; for(let i=0;i<9;i++){ const c=document.createElement('div'); c.className='cell'+(board[i]?' disabled':''); c.innerText = board[i]||''; c.dataset.i=i; c.addEventListener('click', ()=>onCellClick(i)); boardEl.appendChild(c); } }
+
+    function onCellClick(i){ if(!gameOn){ alert('Start a game (New Local or Start Game in lobby)'); return } if(board[i]) return; // enforce turn
+      if(room){ // in room, allow move only if localSide === turn and both players present
+        if(localSide!==turn) return alert("Wait for opponent's move");
+        // apply move to room.moves
+        room.moves.push({i, v:turn, who: current.username, ts: Date.now()}); rooms[room.code]=room; saveRooms(rooms); board[i]=turn; renderBoard(); if(checkWin(turn)){ finishGame(turn); return } if(board.every(x=>x!==null)){ finishGame(null); return } turn = turn==='X'?'O':'X'; updateTurn(); // update board for both players on same device
+      } else {
+        // local solo: both players local
+        board[i]=turn; renderBoard(); if(checkWin(turn)){ finishGame(turn); return } if(board.every(x=>x!==null)){ finishGame(null); return } turn = turn==='X'?'O':'X'; updateTurn();
+      }
+    }
+
+    function checkWin(p){ const lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]]; return lines.some(([a,b,c])=> board[a]===p && board[b]===p && board[c]===p); }
+
+    function finishGame(winner){ gameOn=false; renderBoard(); if(winner){ alert(`${winner} wins!`); highlightWin(winner); updateStats(winner==='X'?'Xwin':'Owin'); } else { alert('Draw'); updateStats('draw'); }
+      // if in room, save moves to room and set status finished
+      if(room){ room.status='finished'; rooms[room.code]=room; saveRooms(rooms); }
+      // save history
+      addHistory({when:new Date().toISOString(), result: winner? (winner+' wins') : 'Draw', board: board.slice()}); renderHistory(); }
+
+    function highlightWin(p){ const lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]]; const winLine = lines.find(([a,b,c])=> board[a]===p && board[b]===p && board[c]===p); if(winLine){ winLine.forEach(i=> boardEl.children[i].style.background='rgba(16,185,129,0.2)'); } }
+
+    function updateStats(type){ if(!current) return; current.stats.played +=1; if(type==='Xwin') current.stats.wins +=1; else if(type==='Owin') current.stats.losses +=1; else if(type==='draw') current.stats.draws +=1; users = users.map(u=> u.email===current.email? current : u); saveUsers(users); renderAuth(); }
+
+    function addHistory(h){ const key='ttt_history'; const arr = JSON.parse(localStorage.getItem(key)||'[]'); arr.unshift(h); localStorage.setItem(key, JSON.stringify(arr.slice(0,20))); }
+    function renderHistory(){ const arr = JSON.parse(localStorage.getItem('ttt_history')||'[]'); historyEl.innerHTML=''; if(!arr.length) { historyEl.innerHTML='<div class="muted">No games yet</div>'; return } arr.slice(0,5).forEach(g=>{ const d=document.createElement('div'); d.style.padding='6px'; d.style.borderRadius='6px'; d.style.marginBottom='6px'; d.style.background='rgba(255,255,255,0.01)'; d.innerHTML=`<div style="font-weight:700">${g.result}</div><div class="muted" style="font-size:12px">${new Date(g.when).toLocaleString()}</div>`; historyEl.appendChild(d); }); }
+
+    function resetBoard(){ board = Array(9).fill(null); gameOn=true; renderBoard(); }
+
+    function startLocalGame(){ gameOn=true; turn='X'; updateTurn(); }
+
+    function updateTurn(){ turnInd.innerText = turn; }
+
+    // ---------- helpers ----------
+    function copyText(t){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); alert('Copied'); }
+    function escapeHtml(s){ return (s+'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c)) }
+    function generateId(){ return Math.random().toString(36).slice(2,9) }
+
+    // ---------- load rooms from storage and auto-join if present ----------
+    (function init(){ rooms = loadRooms(); // if there is a room saved and user is in it, rehydrate
+      // if current user exists and any room contains them, join it
+      if(current){ for(const k of Object.keys(rooms)){ const r = rooms[k]; if(r.players.find(p=>p.username===current.username)){ room = r; localSide = r.players.find(p=>p.username===current.username).side; lobbyBox.classList.remove('hidden'); currentRoomEl.innerText = r.code; statusEl.innerText = r.status==='playing'?'Playing':'In lobby'; renderPlayers(); // apply moves
+                if(r.moves && r.moves.length){ board = Array(9).fill(null); r.moves.forEach(m=> board[m.i]=m.v); renderBoard(); }
+                break; } } }
+    })();
+
+  </script>
+</body>
+</html>
+
